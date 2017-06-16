@@ -1,0 +1,5 @@
+# Limits
+
+This project provides a basic API to submit payments to Braintree (a standard
+payment processor) and load the charged amount into prepaid cards that are
+stored in a database.

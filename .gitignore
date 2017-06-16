@@ -1,0 +1,8 @@
+.*
+*.pyc
+env
+static/
+media/
+dist/
+*.egg-info/
+*.orig
