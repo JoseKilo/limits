@@ -3,3 +3,12 @@ Flask-SQLAlchemy==2.2
 braintree==3.37.2
 
 pytest==3.1.2
+pytest-cov==2.5.1
+pytest-flake8==0.8.1
+flake8-isort==2.2.1
+
+ipdb==0.10.3
+flake8==3.3.0
+isort==4.2.15
+
+Markdown==2.6.8

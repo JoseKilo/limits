@@ -17,6 +17,27 @@ api = Blueprint('api', __name__, template_folder='templates',
                 static_folder='static')
 
 
+@api.errorhandler(HTTPException)
+@api.errorhandler(404)
+@api.errorhandler(400)
+@api.errorhandler(500)
+def handler_unknown_error(error):
+    """
+    Control all possible errors: malformed inputs, nonexistent ids, code
+    errors, etc.
+    """
+
+    if hasattr(error, 'code'):
+        status_code = error.code
+        errors = [serialize_error('http-{}'.format(error.code),
+                                  error.description)]
+    else:
+        status_code = 500
+        errors = [serialize_error('http-500', type(error).__name__)]
+
+    return jsonify({'status': 'error', 'errors': errors}), status_code
+
+
 @api.route('/tokens/', methods=['POST'])
 def generate_token():
     """
@@ -42,7 +63,7 @@ def load_card(card_id):
     amount = Decimal(amount)
 
     user = get_user()
-    card = user.cards.filter_by(id=card_id).one()  # TODO 404
+    card = get_card_or_404(user, card_id)
 
     ensure_customer_created(user, nonce=nonce)
 
@@ -62,6 +83,21 @@ def load_card(card_id):
     return jsonify({'status': status, 'errors': errors}), status_code
 
 
+@api.route('/index.html')
+@api.route('/')
+def home():
+    """
+    Provide some instructions on the main page
+    """
+    with current_app.open_resource('README') as readme_file:
+        content = readme_file.read().decode('UTF-8')
+
+    html = markdown.markdown(content,
+                             extensions=['markdown.extensions.fenced_code'])
+
+    return render_template('api/home.html', content=html)
+
+
 def check_limits(user, card, amount):
     """
     We need to check that the load does not exceed some compliance limits:
@@ -71,7 +107,83 @@ def check_limits(user, card, amount):
         - maximum £2000 worth of loads per 365 days
         - maximum balance at any time £1000
     """
-    pass  # TODO
+    compliance_limits = (
+        (current_app.config['LIMIT_DAY'], timedelta(days=1)),
+        (current_app.config['LIMIT_MONTH'], timedelta(days=30)),
+        (current_app.config['LIMIT_YEAR'], timedelta(days=365)),
+    )
+
+    transactions = get_customer_transactions(user)
+
+    errors = []
+
+    for limit, time_diff in compliance_limits:
+        total_amount = calculate_total_amount_by_date(transactions, time_diff)
+        if total_amount + amount > limit:
+            time_diff_str = str(timedelta(days=1)).split(',')[0]
+            errors.append(serialize_compliance_error(total_amount, amount,
+                                                     limit, time_diff_str))
+
+    limit = current_app.config['LIMIT_BALANCE']
+    if card.balance + amount > limit:
+        errors.append(serialize_compliance_error(total_amount, amount,
+                                                 limit, 'balance'))
+
+    return errors
+
+
+def serialize_compliance_error(total_amount, amount, limit, code):
+    """
+    Produce a Complacence error in the format specified by the API (see README)
+    """
+    return serialize_error(
+        'compliance-{}'.format(code),
+        'ComplianceError: {} + {} > {} ({})'.format(
+            total_amount, amount, limit, code))
+
+
+def serialize_error(code, message):
+    """
+    Produce an error in the format that API specifies (see README)
+    """
+    return {'code': code, 'message': message}
+
+
+def calculate_total_amount_by_date(transactions, time_diff):
+    """
+    Filter a collection of transactions by a timedelta
+    """
+    return sum((
+        transaction.amount for transaction in transactions
+        if transaction.created_at >= datetime.now() - time_diff
+    ), Decimal(0))
+
+
+def get_customer_transactions(user):
+    """
+    Fetch all the Transactions from a given User / Customer that have been
+    Settled or could end up been Settled.
+    """
+    return braintree.Transaction.search(
+        TransactionSearch.customer_id == user.customer_id,
+        TransactionSearch.status.in_list([
+            Transaction.Status.Authorizing,
+            Transaction.Status.Authorized,
+            Transaction.Status.SubmittedForSettlement,
+            Transaction.Status.Settling,
+            Transaction.Status.Settled,
+        ]),
+    ).items
+
+
+def get_card_or_404(user, card_id):
+    """
+    Try to fetch a Card from the database, raise a 404 error if it is not there
+    """
+    try:
+        return user.cards.filter_by(id=card_id).one()
+    except (exc.NoResultFound, exc.MultipleResultsFound):
+        abort(404)
 
 
 def get_user():
@@ -121,3 +233,45 @@ def make_transaction(user, amount, nonce):
             'submit_for_settlement': True
         }
     })
+
+
+def check_transaction(result):
+    """
+    The transaction may have been successful or it may have returned different
+    types of errors.
+
+    More info:
+    https://developers.braintreepayments.com/reference/response/transaction/python
+    """
+
+    if result.is_success:
+        errors = []
+
+    elif result.errors.deep_errors:
+        errors = [serialize_error(error.code, error.message)
+                  for error in result.errors.deep_errors]
+
+    elif result.transaction.processor_settlement_response_code:
+        errors = [serialize_error(
+            result.transaction.processor_settlement_response_code,
+            result.transaction.processor_settlement_response_text,
+        )]
+
+    elif result.transaction.processor_response_code:
+        errors = [serialize_error(
+            result.transaction.processor_response_code,
+            result.transaction.processor_response_text,
+        )]
+
+    elif result.transaction.gateway_rejection_reason:
+        errors = [serialize_error(
+            result.transaction.gateway_rejection_reason,
+            '',
+        )]
+
+    else:
+        message = 'An UNKNOWN transaction error occurred: %d'
+        api.logger.error(message, result.transaction.id)
+        errors = [serialize_error('UNKNOWN', 'UNKNOWN')]
+
+    return errors
