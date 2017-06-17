@@ -1,0 +1,6 @@
+[run]
+branch = false
+[report]
+sort = cover
+fail_under = 95
+show_missing = true
