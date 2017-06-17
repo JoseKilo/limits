@@ -1,0 +1,5 @@
+Flask==0.12.2
+Flask-SQLAlchemy==2.2
+braintree==3.37.2
+
+pytest==3.1.2

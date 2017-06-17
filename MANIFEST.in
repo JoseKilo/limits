@@ -1,0 +1,3 @@
+graft limits/templates
+graft limits/static
+include limits/schema.sql
