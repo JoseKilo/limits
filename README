@@ -38,6 +38,18 @@ If you want to override the settings:
 export LIMITS_SETTINGS=/path/to/settings
 ```
 
+For example, you could replace the Braintree credentials:
+
+```bash
+echo "
+BRAINTREE_MERCHANT_ID = '...'
+BRAINTREE_PUBLIC_KEY = '...'
+BRAINTREE_PRIVATE_KEY = '...'
+" >> customconfig.py
+
+export LIMITS_SETTINGS='customconfig.py'
+```
+
 To initialize the database and populate it with some fake data:
 
 ```bash
@@ -223,3 +235,5 @@ You could also call `pytest` directly:
   session using an `@app.before_request` decorator.
 - The session is stored on the client side with a cookie, that means that the
   user could easily be tampered.
+- The Sandbox mode is hardcoded in the Braintree initialization, the mode
+  should depend on a configuration value from application configuration.
