@@ -18,6 +18,9 @@ def pytest_itemcollected(item):
 
 @pytest.fixture
 def app():
+    """
+    Instantiate the Flask application with the Test configuration
+    """
     app = create_app(TestConfig)
     app.testing = True
     return app
@@ -25,6 +28,9 @@ def app():
 
 @pytest.fixture
 def database(app):
+    """
+    Initialize the database with some test data, and flush everything later
+    """
     with app.app_context():
         init_db()
         populate_db_with_fake_state()
@@ -37,6 +43,10 @@ def database(app):
 
 @pytest.fixture
 def client(app, database):
+    """
+    Provide a test client to our tests ensuring that we get access to the
+    request test context.
+    """
     client = app.test_client()
 
     with app.test_request_context():
