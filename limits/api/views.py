@@ -89,7 +89,7 @@ def home():
     """
     Provide some instructions on the main page
     """
-    with current_app.open_resource('README') as readme_file:
+    with current_app.open_resource('README.md') as readme_file:
         content = readme_file.read().decode('UTF-8')
 
     html = markdown.markdown(content,

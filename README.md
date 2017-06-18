@@ -4,9 +4,9 @@ This project provides a basic API to submit payments to Braintree (a standard
 payment processor) and load the charged amount into prepaid cards that are
 stored in a database.
 
-To build and install the python package:
-
 ## Setup
+
+To build and install the python package:
 
 ```bash
 virtualenv .venv
@@ -114,7 +114,7 @@ Status code: 200
 
 In order to load a Card we need the client to provide the server with a nonce:
 once the client successfully obtains a customer payment method, it receives
-a `payment_method_nonce` representing customer payment authorization.
+a `payment_method_nonce` representing the customer payment authorization.
 
 URL: `/cards/{:id}/load/`
 
@@ -164,7 +164,9 @@ An error response due to compliance errors.
 }
 ```
 
-An error response due to compliance errors.
+An error response due to a declined authorization. The error codes and messages
+are taken from Braintree error specifications:
+https://articles.braintreepayments.com/control-panel/transactions/declines#authorization-decline-codes
 
 `Status code`: 400
 
@@ -173,8 +175,8 @@ An error response due to compliance errors.
     "status": "error",
     "errors": [
         {
-            'code': '2000',
-            'message': 'Do Not Honor'
+            "code": "2000",
+            "message": "Do Not Honor"
         }
     ]
 }
@@ -226,7 +228,7 @@ You could also call `pytest` directly:
 
 ## Compatibility
 
-- Tested on Linux.
+- Tested on GNU/Linux.
 - Tested on Python 3.4.3.
 
 ## Known issues
@@ -236,4 +238,9 @@ You could also call `pytest` directly:
 - The session is stored on the client side with a cookie, that means that the
   user could easily be tampered.
 - The Sandbox mode is hardcoded in the Braintree initialization, the mode
-  should depend on a configuration value from application configuration.
+  should depend on a configuration value from the application configuration.
+- The project is configured to use Sqlite by default, which is unsuitable for
+  a production environment.
+- SQLAlchemy raises a warning when we try to use a `Decimal` object to set the
+  value of a `Numeric` column because Sqlite only implements a floating point
+  data type.
